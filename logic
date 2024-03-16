@@ -1,0 +1,54 @@
+public function generatePayslip($employeeId)
+{
+    $employee = Employee::find($employeeId);
+
+    // Calculate total days in the current month
+    $totalDays = Carbon::now()->daysInMonth;
+
+    // Calculate base salary, allowances, and deductions
+    $baseSalary = $employee->base_salary;
+    $allowances = $employee->allowances->sum('amount');
+    $deductions = $employee->deductions->sum('amount');
+
+    // Calculate late check-in and early checkout deductions based on shift
+    $lateCheckInDeduction = 0;
+    $earlyCheckoutDeduction = 0;
+
+    foreach ($employee->attendance as $attendance) {
+        $shiftStart = Carbon::parse($attendance->shift->start_time);
+        $shiftEnd = Carbon::parse($attendance->shift->end_time);
+
+        if ($attendance->check_in->gt($shiftStart)) {
+            $lateCheckInDeduction += $baseSalary * 0.025;
+        }
+
+        if ($attendance->check_out->lt($shiftEnd)) {
+            $earlyCheckoutDeduction += $baseSalary * 0.025;
+        }
+    }
+
+    // Calculate day rate deduction for days off
+    $daysOff = $employee->attendance->where('status', 'off')->count();
+    $daysOffDeduction = $daysOff * ($baseSalary / $totalDays);
+
+    // Calculate total earnings and deductions
+    $totalEarnings = $baseSalary + $allowances;
+    $totalDeductions = $deductions + $lateCheckInDeduction + $earlyCheckoutDeduction + $daysOffDeduction;
+
+    // Calculate net salary
+    $netSalary = $totalEarnings - $totalDeductions;
+
+    return view('payslip', [
+        'employee' => $employee,
+        'totalDays' => $totalDays,
+        'baseSalary' => $baseSalary,
+        'allowances' => $allowances,
+        'deductions' => $deductions,
+        'lateCheckInDeduction' => $lateCheckInDeduction,
+        'earlyCheckoutDeduction' => $earlyCheckoutDeduction,
+        'daysOffDeduction' => $daysOffDeduction,
+        'totalEarnings' => $totalEarnings,
+        'totalDeductions' => $totalDeductions,
+        'netSalary' => $netSalary,
+    ]);
+}
